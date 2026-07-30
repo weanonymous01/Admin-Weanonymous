@@ -14,7 +14,7 @@ function formatSender(emailInput) {
   return `We Anonymous <${emailInput.trim()}>`;
 }
 
-// 1. Dark Mode Brand HTML Template (Visual Newsletter)
+// Visual Brand Dark HTML Template
 function generateBrandHtmlEmail(textMessage, recipientEmail = '') {
   const paragraphs = textMessage.trim().split(/\n\n+/);
   const formattedBody = paragraphs.map(p => {
@@ -84,32 +84,6 @@ function generateBrandHtmlEmail(textMessage, recipientEmail = '') {
 </html>`;
 }
 
-// 2. Primary Inbox Mode Template (Human 1-on-1 Minimalist Format)
-function generatePrimaryHtmlEmail(textMessage, recipientEmail = '') {
-  const paragraphs = textMessage.trim().split(/\n\n+/);
-  const formattedBody = paragraphs.map(p => {
-    const withLinks = p.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color: #2563eb; text-decoration: underline;">$1</a>');
-    return `<p style="margin: 0 0 16px 0; line-height: 1.6; color: #111827; font-size: 15px;">${withLinks.replace(/\n/g, '<br>')}</p>`;
-  }).join('');
-
-  const unsubUrl = `https://join.weanonymous.in/unsubscribe.html?email=${encodeURIComponent(recipientEmail)}`;
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-</head>
-<body style="margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #111827; background-color: #ffffff; -webkit-font-smoothing: antialiased;">
-  <div style="max-width: 600px; margin: 0 auto;">
-    ${formattedBody}
-    <div style="margin-top: 36px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280;">
-      We Anonymous · <a href="${unsubUrl}" style="color: #6b7280; text-decoration: underline;">Unsubscribe</a>
-    </div>
-  </div>
-</body>
-</html>`;
-}
-
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -132,29 +106,24 @@ const server = http.createServer(async (req, res) => {
         const targetTo = Array.isArray(to) ? to[0] : to;
         const keyToUse = apiKey || DEFAULT_RESEND_KEY;
         let fromEmail = formatSender(from);
-
-        // Primary Mode vs Brand Dark Mode
-        let finalHtml = html;
-        if (!html || !html.includes('<table') || templateMode) {
-          if (templateMode === 'primary') {
-            finalHtml = generatePrimaryHtmlEmail(text || html || '', targetTo);
-          } else {
-            finalHtml = generateBrandHtmlEmail(text || html || '', targetTo);
-          }
-        }
-
         const unsubUrl = `https://join.weanonymous.in/unsubscribe.html?email=${encodeURIComponent(targetTo)}`;
 
-        console.log(`[Email Dispatch Request] Target: ${targetTo} | Mode: ${templateMode || 'brand'} | Subject: "${subject}"`);
+        let emailPayload = {};
 
-        // Dispatch Email with Primary Inbox Headers
-        let response = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${keyToUse}`
-          },
-          body: JSON.stringify({
+        if (templateMode === 'primary') {
+          // PURE PLAIN TEXT MODE (Bypasses Gmail Promotions Filter)
+          // No HTML, No List-Unsubscribe headers -> Gmail treats as 1-on-1 personal email
+          const plainTextBody = `${text || ''}\n\n---\nWe Anonymous Community\nUnsubscribe: ${unsubUrl}`;
+          emailPayload = {
+            from: fromEmail,
+            to: Array.isArray(to) ? to : [to],
+            subject: subject,
+            text: plainTextBody
+          };
+        } else {
+          // VISUAL BRAND DARK MODE
+          const finalHtml = html && html.includes('<table') ? html : generateBrandHtmlEmail(text || html || '', targetTo);
+          emailPayload = {
             from: fromEmail,
             to: Array.isArray(to) ? to : [to],
             subject: subject,
@@ -162,10 +131,21 @@ const server = http.createServer(async (req, res) => {
             html: finalHtml,
             headers: {
               'List-Unsubscribe': `<${unsubUrl}>`,
-              'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-              'X-Entity-Ref-ID': Date.now().toString()
+              'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
             }
-          })
+          };
+        }
+
+        console.log(`[Email Dispatch Request] Target: ${targetTo} | Mode: ${templateMode || 'brand'} | Subject: "${subject}"`);
+
+        // Dispatch Email
+        let response = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${keyToUse}`
+          },
+          body: JSON.stringify(emailPayload)
         });
 
         let data = await response.json();
@@ -174,25 +154,14 @@ const server = http.createServer(async (req, res) => {
         if (!response.ok && data.message && data.message.includes('domain is not verified')) {
           console.warn(`[Domain Unverified Notice]: "${fromEmail}" is not verified on Resend yet. Retrying dispatch automatically with "We Anonymous <onboarding@resend.dev>"...`);
           
-          fromEmail = 'We Anonymous <onboarding@resend.dev>';
+          emailPayload.from = 'We Anonymous <onboarding@resend.dev>';
           response = await fetch('https://api.resend.com/emails', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${keyToUse}`
             },
-            body: JSON.stringify({
-              from: fromEmail,
-              to: Array.isArray(to) ? to : [to],
-              subject: subject,
-              text: text || '',
-              html: finalHtml,
-              headers: {
-                'List-Unsubscribe': `<${unsubUrl}>`,
-                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-                'X-Entity-Ref-ID': Date.now().toString()
-              }
-            })
+            body: JSON.stringify(emailPayload)
           });
           data = await response.json();
         }
