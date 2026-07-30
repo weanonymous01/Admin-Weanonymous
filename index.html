@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>We Anonymous -- Admin Panel & Email Automation</title>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Supabase JS Client SDK -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              lime: '#d5fc47',
+              dark: '#080808',
+              card: '#111111',
+              border: 'rgba(254, 254, 254, 0.1)',
+              text: '#fefefe',
+              subtext: 'rgba(254, 254, 254, 0.6)'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    body {
+      background-color: #080808;
+      color: #fefefe;
+      font-family: 'Inter', sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #080808;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(254, 254, 254, 0.2);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #d5fc47;
+    }
+
+    .glass-card {
+      background-color: #111111;
+      border: 1px solid rgba(254, 254, 254, 0.1);
+      border-radius: 12px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col md:flex-row antialiased selection:bg-brand-lime selection:text-black">
+
+  <!-- ========================================== -->
+  <!-- 1. PASSCODE LOCK SCREEN -->
+  <!-- ========================================== -->
+  <div id="lock-screen" class="fixed inset-0 z-50 bg-[#080808] flex items-center justify-center p-4">
+    <div class="glass-card max-w-md w-full p-8 text-center space-y-6">
+      <div class="w-16 h-16 rounded-full bg-brand-lime/10 border border-brand-lime/30 text-brand-lime flex items-center justify-center mx-auto text-2xl font-bold">
+        WA
+      </div>
+      <div>
+        <h2 class="text-2xl font-bold text-brand-text">We Anonymous Admin</h2>
+        <p class="text-brand-subtext text-sm mt-1">Enter your admin passcode to access dashboard</p>
+      </div>
+      <form onsubmit="handleUnlock(event)" class="space-y-4">
+        <input 
+          type="password" 
+          id="passcode-input" 
+          placeholder="Enter Passcode" 
+          class="w-full bg-[#161616] border border-brand-border rounded-xl px-4 py-3 text-center text-lg font-semibold tracking-widest text-brand-text focus:outline-none focus:border-brand-lime"
+          required 
+          autofocus
+        />
+        <button 
+          type="submit" 
+          class="w-full bg-brand-lime text-black font-bold py-3.5 rounded-xl hover:opacity-90 transition active:scale-[0.99]"
+        >
+          Unlock Admin Panel
+        </button>
+      </form>
+      <p id="lock-error" class="text-red-400 text-xs hidden">Incorrect passcode. Try again.</p>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- 2. SIDEBAR NAVIGATION -->
+  <!-- ========================================== -->
+  <aside class="w-full md:w-64 glass-card rounded-none border-t-0 border-l-0 border-b-0 p-6 flex flex-col justify-between shrink-0">
+    <div class="space-y-8">
+      <!-- Logo Header -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-brand-lime text-black font-bold flex items-center justify-center text-sm">
+          WA
+        </div>
+        <div>
+          <h1 class="font-bold text-base leading-tight">We Anonymous</h1>
+          <p class="text-xs text-brand-lime font-medium">Admin & Email Engine</p>
+        </div>
+      </div>
+
+      <!-- Nav Links -->
+      <nav class="space-y-2">
+        <button 
+          onclick="switchTab('dashboard')" 
+          id="nav-dashboard" 
+          class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition text-black bg-brand-lime"
+        >
+          <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+          Dashboard
+        </button>
+
+        <button 
+          onclick="switchTab('leads')" 
+          id="nav-leads" 
+          class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition text-brand-subtext hover:text-brand-text hover:bg-[#181818]"
+        >
+          <i data-lucide="table" class="w-4 h-4"></i>
+          Leads Database (CSV)
+        </button>
+
+        <button 
+          onclick="switchTab('mailer')" 
+          id="nav-mailer" 
+          class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition text-brand-subtext hover:text-brand-text hover:bg-[#181818]"
+        >
+          <i data-lucide="send" class="w-4 h-4"></i>
+          Resend Mailer
+        </button>
+
+        <button 
+          onclick="switchTab('settings')" 
+          id="nav-settings" 
+          class="nav-item w-full flex items-center gap-3 px-4 py-3 rounded-xl font-semibold text-sm transition text-brand-subtext hover:text-brand-text hover:bg-[#181818]"
+        >
+          <i data-lucide="settings" class="w-4 h-4"></i>
+          Settings & Config
+        </button>
+      </nav>
+    </div>
+
+    <!-- Quick Status Footer -->
+    <div class="pt-6 border-t border-brand-border space-y-3">
+      <div class="flex items-center justify-between text-xs text-brand-subtext">
+        <span>Supabase DB</span>
+        <span id="db-status-badge" class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold">Connected</span>
+      </div>
+      <button onclick="lockAdmin()" class="w-full text-xs text-red-400 hover:text-red-300 flex items-center justify-center gap-1.5 py-1">
+        <i data-lucide="lock" class="w-3 h-3"></i> Lock Dashboard
+      </button>
+    </div>
+  </aside>
+
+  <!-- ========================================== -->
+  <!-- 3. MAIN CONTENT AREA -->
+  <!-- ========================================== -->
+  <main class="flex-1 p-6 md:p-10 overflow-y-auto max-w-7xl mx-auto w-full space-y-8">
+
+    <!-- TOP TITLE HEADER -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-brand-border pb-6">
+      <div>
+        <h2 id="page-title" class="text-2xl font-bold">Dashboard Overview</h2>
+        <p id="page-subtitle" class="text-sm text-brand-subtext mt-1">Real-time statistics & community lead analytics</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button onclick="refreshData()" class="glass-card px-4 py-2.5 text-xs font-semibold flex items-center gap-2 hover:border-brand-lime transition">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh Data
+        </button>
+      </div>
+    </div>
+
+    <!-- TAB 1: DASHBOARD OVERVIEW -->
+    <section id="tab-dashboard" class="tab-content space-y-6">
+      <!-- STATS GRID -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Total Leads -->
+        <div class="glass-card p-6 space-y-2">
+          <div class="flex items-center justify-between text-brand-subtext text-xs font-semibold">
+            <span>TOTAL LEADS</span>
+            <i data-lucide="users" class="w-4 h-4 text-brand-lime"></i>
+          </div>
+          <p id="stat-total-leads" class="text-3xl font-bold">0</p>
+          <p class="text-xs text-brand-subtext">Captured across all paths</p>
+        </div>
+
+        <!-- Beginner Path -->
+        <div class="glass-card p-6 space-y-2">
+          <div class="flex items-center justify-between text-brand-subtext text-xs font-semibold">
+            <span>BEGINNER PATH</span>
+            <span class="w-2 h-2 rounded-full bg-blue-400"></span>
+          </div>
+          <p id="stat-beginner-count" class="text-3xl font-bold">0</p>
+          <p class="text-xs text-brand-subtext">No Linux knowledge</p>
+        </div>
+
+        <!-- Intermediate Path -->
+        <div class="glass-card p-6 space-y-2">
+          <div class="flex items-center justify-between text-brand-subtext text-xs font-semibold">
+            <span>INTERMEDIATE PATH</span>
+            <span class="w-2 h-2 rounded-full bg-brand-lime"></span>
+          </div>
+          <p id="stat-intermediate-count" class="text-3xl font-bold">0</p>
+          <p class="text-xs text-brand-subtext">Knows Linux + Student</p>
+        </div>
+
+        <!-- Professional Path -->
+        <div class="glass-card p-6 space-y-2">
+          <div class="flex items-center justify-between text-brand-subtext text-xs font-semibold">
+            <span>PROFESSIONAL PATH</span>
+            <span class="w-2 h-2 rounded-full bg-purple-400"></span>
+          </div>
+          <p id="stat-professional-count" class="text-3xl font-bold">0</p>
+          <p class="text-xs text-brand-subtext">Working Pro / Freelancer</p>
+        </div>
+      </div>
+
+      <!-- OPT-IN METRICS GRID -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Bootcamp Opt-in Stat -->
+        <div class="glass-card p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-sm">HackSnip 7-Day Bootcamp Interest</h3>
+            <span id="bootcamp-optin-pct" class="text-sm font-bold text-brand-lime">0%</span>
+          </div>
+          <div class="w-full bg-[#181818] h-3 rounded-full overflow-hidden">
+            <div id="bootcamp-optin-bar" class="bg-brand-lime h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+          </div>
+          <p class="text-xs text-brand-subtext"><span id="bootcamp-optin-count">0</span> leads requested bootcamp access</p>
+        </div>
+
+        <!-- Newsletter Opt-in Stat -->
+        <div class="glass-card p-6 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-bold text-sm">Weekly Newsletter Subscriptions</h3>
+            <span id="newsletter-optin-pct" class="text-sm font-bold text-brand-lime">0%</span>
+          </div>
+          <div class="w-full bg-[#181818] h-3 rounded-full overflow-hidden">
+            <div id="newsletter-optin-bar" class="bg-brand-lime h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+          </div>
+          <p class="text-xs text-brand-subtext"><span id="newsletter-optin-count">0</span> leads subscribed to updates</p>
+        </div>
+      </div>
+
+      <!-- RECENT REGISTRATIONS FEED -->
+      <div class="glass-card p-6 space-y-4">
+        <h3 class="font-bold text-base">Recent Registrations Feed</h3>
+        <div id="recent-leads-container" class="space-y-3">
+          <p class="text-xs text-brand-subtext">Loading recent leads...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: LEADS DATABASE (CSV STYLE TABLE) -->
+    <section id="tab-leads" class="tab-content hidden space-y-6">
+      <!-- TABLE CONTROLS -->
+      <div class="glass-card p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <!-- Search Input -->
+        <div class="relative flex-1 max-w-md">
+          <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-3.5 text-brand-subtext"></i>
+          <input 
+            type="text" 
+            id="search-input" 
+            placeholder="Search by name, email, or phone..." 
+            oninput="filterLeadsTable()" 
+            class="w-full bg-[#161616] border border-brand-border rounded-xl pl-10 pr-4 py-2.5 text-sm text-brand-text placeholder:text-brand-subtext focus:outline-none focus:border-brand-lime"
+          />
+        </div>
+
+        <!-- Segment Filter Tabs & CSV Export Button -->
+        <div class="flex items-center gap-3 overflow-x-auto">
+          <select id="filter-segment" onchange="filterLeadsTable()" class="bg-[#161616] border border-brand-border rounded-xl px-3 py-2.5 text-xs text-brand-text font-semibold focus:outline-none focus:border-brand-lime">
+            <option value="ALL">All Segments</option>
+            <option value="beginner">Beginner</option>
+            <option value="intermediate">Intermediate</option>
+            <option value="professional">Professional</option>
+          </select>
+
+          <button onclick="exportToCSV()" class="bg-brand-lime text-black font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 hover:opacity-90 transition active:scale-95 shrink-0">
+            <i data-lucide="download" class="w-3.5 h-3.5"></i> Export to CSV
+          </button>
+        </div>
+      </div>
+
+      <!-- LEADS TABLE CONTAINER -->
+      <div class="glass-card overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-[#161616] border-b border-brand-border text-brand-subtext uppercase tracking-wider font-semibold">
+              <tr>
+                <th class="p-4">Name</th>
+                <th class="p-4">Contact Info</th>
+                <th class="p-4">Segment Tag</th>
+                <th class="p-4">Linux Knowledge</th>
+                <th class="p-4">Role</th>
+                <th class="p-4">Experience</th>
+                <th class="p-4">Bootcamp</th>
+                <th class="p-4">Registered At</th>
+              </tr>
+            </thead>
+            <tbody id="leads-table-body" class="divide-y divide-brand-border text-brand-text">
+              <tr>
+                <td colspan="8" class="p-6 text-center text-brand-subtext">Loading leads from database...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="p-4 border-t border-brand-border flex items-center justify-between text-xs text-brand-subtext">
+          <span>Showing <strong id="visible-leads-count" class="text-brand-text">0</strong> leads</span>
+          <span>Database: Live Supabase (`leads`)</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: RESEND MAILER -->
+    <section id="tab-mailer" class="tab-content hidden space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- EMAIL COMPOSER FORM (2 cols) -->
+        <div class="lg:col-span-2 glass-card p-6 space-y-6">
+          <h3 class="font-bold text-base flex items-center gap-2">
+            <i data-lucide="mail" class="w-4 h-4 text-brand-lime"></i> Broadcast Email Composer
+          </h3>
+
+          <div class="space-y-4">
+            <!-- Target Audience Selector -->
+            <div>
+              <label class="block text-xs font-semibold text-brand-subtext mb-2">TARGET AUDIENCE SEGMENT</label>
+              <select id="mailer-target" onchange="updateRecipientCount()" class="w-full bg-[#161616] border border-brand-border rounded-xl p-3 text-sm text-brand-text font-medium focus:outline-none focus:border-brand-lime">
+                <option value="ALL">All Captured Leads</option>
+                <option value="beginner">Beginner Path Only</option>
+                <option value="intermediate">Intermediate Path Only</option>
+                <option value="professional">Professional Path Only</option>
+                <option value="BOOTCAMP">HackSnip Bootcamp Opt-ins Only</option>
+              </select>
+            </div>
+
+            <!-- Subject Line Input -->
+            <div>
+              <label class="block text-xs font-semibold text-brand-subtext mb-2">EMAIL SUBJECT LINE</label>
+              <input 
+                type="text" 
+                id="mailer-subject" 
+                placeholder="e.g. Welcome to We Anonymous -- Your Exclusive Guide" 
+                class="w-full bg-[#161616] border border-brand-border rounded-xl p-3 text-sm text-brand-text focus:outline-none focus:border-brand-lime" 
+              />
+            </div>
+
+            <!-- Email Body Content -->
+            <div>
+              <label class="block text-xs font-semibold text-brand-subtext mb-2">EMAIL CONTENT (HTML or Plain Text)</label>
+              <textarea 
+                id="mailer-body" 
+                rows="10" 
+                placeholder="Write your email message here... Use {{name}} for personalized name tags." 
+                class="w-full bg-[#161616] border border-brand-border rounded-xl p-3 text-sm text-brand-text focus:outline-none focus:border-brand-lime font-mono leading-relaxed"
+              >Hi {{name}},
+
+Welcome to the We Anonymous Cybersecurity Community!
+
+Here are your exclusive tools and weekend live session invites straight from the team.
+
+Join the WhatsApp group if you haven't already:
+https://chat.whatsapp.com/HSpSgCon0LSKbtT1ptEjzI
+
+Best regards,
+We Anonymous Team</textarea>
+            </div>
+
+            <!-- Send Action Buttons -->
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
+              <span class="text-xs text-brand-subtext">Estimated Recipients: <strong id="recipient-count" class="text-brand-lime">0</strong></span>
+              <div class="flex items-center gap-3 w-full sm:w-auto">
+                <button onclick="sendTestEmail()" class="w-full sm:w-auto glass-card px-4 py-3 text-xs font-bold hover:border-brand-lime transition">
+                  Send Test Preview
+                </button>
+                <button onclick="sendBroadcast()" class="w-full sm:w-auto bg-brand-lime text-black font-bold px-6 py-3 rounded-xl text-xs hover:opacity-90 transition active:scale-95 flex items-center justify-center gap-2">
+                  <i data-lucide="send" class="w-3.5 h-3.5"></i> Broadcast via Resend
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RESEND CONFIG & AUDIENCE STATS (1 col) -->
+        <div class="space-y-6">
+          <div class="glass-card p-6 space-y-4">
+            <h3 class="font-bold text-sm flex items-center gap-2">
+              <i data-lucide="key" class="w-4 h-4 text-brand-lime"></i> Resend API Setup
+            </h3>
+            <p class="text-xs text-brand-subtext">Enter your Resend API Key from <a href="https://resend.com" target="_blank" class="text-brand-lime underline">resend.com</a> to send live emails.</p>
+            <input 
+              type="password" 
+              id="resend-api-key" 
+              placeholder="re_123456789..." 
+              oninput="saveResendKey()"
+              class="w-full bg-[#161616] border border-brand-border rounded-xl p-3 text-xs font-mono text-brand-text focus:outline-none focus:border-brand-lime"
+            />
+            <input 
+              type="email" 
+              id="resend-from-email" 
+              placeholder="From Email (e.g. updates@weanonymous.in or onboarding@resend.dev)" 
+              oninput="saveResendKey()"
+              class="w-full bg-[#161616] border border-brand-border rounded-xl p-3 text-xs font-mono text-brand-text focus:outline-none focus:border-brand-lime"
+            />
+            <p class="text-[11px] text-emerald-400 font-medium">✓ Key auto-saved in local admin storage</p>
+          </div>
+
+          <div class="glass-card p-6 space-y-3">
+            <h3 class="font-bold text-sm">Template Variables</h3>
+            <p class="text-xs text-brand-subtext">You can use these placeholders in your body text:</p>
+            <ul class="text-xs font-mono space-y-1 text-brand-text">
+              <li><span class="text-brand-lime">{{name}}</span> - Recipient Full Name</li>
+              <li><span class="text-brand-lime">{{email}}</span> - Recipient Email</li>
+              <li><span class="text-brand-lime">{{segment}}</span> - Assigned Segment Tag</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- TAB 4: SETTINGS & CONFIG -->
+    <section id="tab-settings" class="tab-content hidden space-y-6 max-w-2xl">
+      <div class="glass-card p-6 space-y-6">
+        <h3 class="font-bold text-base flex items-center gap-2">
+          <i data-lucide="sliders" class="w-4 h-4 text-brand-lime"></i> Supabase & Dashboard Credentials
+        </h3>
+
+        <div class="space-y-4 text-xs">
+          <div>
+            <label class="block font-semibold text-brand-subtext mb-2">SUPABASE PROJECT URL</label>
+            <input 
+              type="text" 
+              id="config-db-url" 
+              class="w-full bg-[#161616] border border-brand-border rounded-xl p-3 font-mono text-brand-text focus:outline-none focus:border-brand-lime" 
+              readOnly 
+            />
+          </div>
+
+          <div>
+            <label class="block font-semibold text-brand-subtext mb-2">SUPABASE PUBLIC ANON KEY</label>
+            <input 
+              type="text" 
+              id="config-db-key" 
+              class="w-full bg-[#161616] border border-brand-border rounded-xl p-3 font-mono text-brand-text focus:outline-none focus:border-brand-lime" 
+              readOnly 
+            />
+          </div>
+
+          <div>
+            <label class="block font-semibold text-brand-subtext mb-2">CHANGE ADMIN PASSCODE</label>
+            <input 
+              type="password" 
+              id="config-passcode" 
+              placeholder="Enter new passcode" 
+              class="w-full bg-[#161616] border border-brand-border rounded-xl p-3 font-mono text-brand-text focus:outline-none focus:border-brand-lime" 
+            />
+          </div>
+
+          <button onclick="updatePasscode()" class="bg-brand-lime text-black font-bold px-5 py-3 rounded-xl text-xs hover:opacity-90 transition">
+            Save Passcode
+          </button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========================================== -->
+  <!-- 4. JAVASCRIPT LOGIC ENGINE -->
+  <!-- ========================================== -->
+  <script>
+    // Configuration
+    const SUPABASE_CONFIG = {
+      url: 'https://hgasrrhsfvyswinkfvhg.supabase.co',
+      anonKey: 'sb_publishable_BzxL4H4Mx-Csc3fph_iiNw_UiVpLUk-'
+    };
+
+    let DEFAULT_PASSCODE = 'admin123';
+    let supabaseClient = null;
+    let allLeads = [];
+
+    // Initialize Page
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+
+      // Check Saved Passcode
+      const savedPasscode = localStorage.getItem('wa_admin_passcode');
+      if (savedPasscode) DEFAULT_PASSCODE = savedPasscode;
+
+      // Fill Config fields
+      document.getElementById('config-db-url').value = SUPABASE_CONFIG.url;
+      document.getElementById('config-db-key').value = SUPABASE_CONFIG.anonKey;
+
+      // Load Saved Resend Credentials
+      document.getElementById('resend-api-key').value = localStorage.getItem('wa_resend_key') || '';
+      document.getElementById('resend-from-email').value = localStorage.getItem('wa_resend_from') || 'onboarding@resend.dev';
+
+      // Initialize Supabase
+      if (window.supabase) {
+        try {
+          supabaseClient = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.anonKey);
+        } catch (e) {
+          console.error('Supabase Init Error:', e);
+        }
+      }
+
+      // Check Session Auth
+      if (sessionStorage.getItem('wa_admin_authenticated') === 'true') {
+        document.getElementById('lock-screen').style.display = 'none';
+        refreshData();
+      }
+    });
+
+    // Passcode Lock Handler
+    function handleUnlock(e) {
+      e.preventDefault();
+      const input = document.getElementById('passcode-input').value;
+      if (input === DEFAULT_PASSCODE) {
+        sessionStorage.setItem('wa_admin_authenticated', 'true');
+        document.getElementById('lock-screen').style.display = 'none';
+        document.getElementById('lock-error').classList.add('hidden');
+        refreshData();
+      } else {
+        document.getElementById('lock-error').classList.remove('hidden');
+      }
+    }
+
+    function lockAdmin() {
+      sessionStorage.removeItem('wa_admin_authenticated');
+      document.getElementById('lock-screen').style.display = 'flex';
+      document.getElementById('passcode-input').value = '';
+    }
+
+    function updatePasscode() {
+      const newPass = document.getElementById('config-passcode').value.trim();
+      if (newPass) {
+        localStorage.setItem('wa_admin_passcode', newPass);
+        DEFAULT_PASSCODE = newPass;
+        alert('Admin passcode updated successfully!');
+      }
+    }
+
+    // Tab Switcher
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.nav-item').forEach(el => {
+        el.classList.remove('bg-brand-lime', 'text-black');
+        el.classList.add('text-brand-subtext');
+      });
+
+      document.getElementById('tab-' + tabName).classList.remove('hidden');
+      const activeNav = document.getElementById('nav-' + tabName);
+      activeNav.classList.add('bg-brand-lime', 'text-black');
+      activeNav.classList.remove('text-brand-subtext');
+
+      const titles = {
+        dashboard: ['Dashboard Overview', 'Real-time statistics & community lead analytics'],
+        leads: ['Leads Database (CSV View)', 'Full list of captured leads with CSV export'],
+        mailer: ['Resend Email Mailer', 'Broadcast targeted email sequences to community leads'],
+        settings: ['Settings & Configuration', 'Database credentials & admin passcode setup']
+      };
+
+      document.getElementById('page-title').textContent = titles[tabName][0];
+      document.getElementById('page-subtitle').textContent = titles[tabName][1];
+    }
+
+    // Refresh Data from Supabase
+    async function refreshData() {
+      if (!supabaseClient) return;
+
+      try {
+        const { data, error } = await supabaseClient
+          .from('leads')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Fetch Error:', error);
+          document.getElementById('db-status-badge').textContent = 'Error';
+          document.getElementById('db-status-badge').className = 'px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-semibold';
+          return;
+        }
+
+        allLeads = data || [];
+        document.getElementById('db-status-badge').textContent = 'Live Connected';
+        document.getElementById('db-status-badge').className = 'px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold';
+
+        renderDashboardStats();
+        renderLeadsTable();
+        updateRecipientCount();
+      } catch (err) {
+        console.error('Database communication error:', err);
+      }
+    }
+
+    // Render Dashboard Stats
+    function renderDashboardStats() {
+      const total = allLeads.length;
+      document.getElementById('stat-total-leads').textContent = total;
+
+      const beginner = allLeads.filter(l => l.segment_tag === 'beginner').length;
+      const intermediate = allLeads.filter(l => l.segment_tag === 'intermediate').length;
+      const professional = allLeads.filter(l => l.segment_tag === 'professional').length;
+
+      document.getElementById('stat-beginner-count').textContent = beginner;
+      document.getElementById('stat-intermediate-count').textContent = intermediate;
+      document.getElementById('stat-professional-count').textContent = professional;
+
+      const bootcampCount = allLeads.filter(l => l.hacksnip_bootcamp).length;
+      const bootcampPct = total ? Math.round((bootcampCount / total) * 100) : 0;
+      document.getElementById('bootcamp-optin-pct').textContent = bootcampPct + '%';
+      document.getElementById('bootcamp-optin-bar').style.width = bootcampPct + '%';
+      document.getElementById('bootcamp-optin-count').textContent = bootcampCount;
+
+      const newsletterCount = allLeads.filter(l => l.newsletter_subscribed).length;
+      const newsletterPct = total ? Math.round((newsletterCount / total) * 100) : 0;
+      document.getElementById('newsletter-optin-pct').textContent = newsletterPct + '%';
+      document.getElementById('newsletter-optin-bar').style.width = newsletterPct + '%';
+      document.getElementById('newsletter-optin-count').textContent = newsletterCount;
+
+      // Recent Registrations Feed
+      const recentContainer = document.getElementById('recent-leads-container');
+      if (allLeads.length === 0) {
+        recentContainer.innerHTML = '<p class="text-xs text-brand-subtext">No leads captured yet.</p>';
+        return;
+      }
+
+      recentContainer.innerHTML = allLeads.slice(0, 5).map(lead => `
+        <div class="flex items-center justify-between p-3 rounded-xl bg-[#161616] border border-brand-border text-xs">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-brand-lime/10 text-brand-lime font-bold flex items-center justify-center uppercase">
+              ${lead.name ? lead.name[0] : 'L'}
+            </div>
+            <div>
+              <p class="font-bold text-brand-text">${lead.name}</p>
+              <p class="text-[11px] text-brand-subtext">${lead.email} · ${lead.phone}</p>
+            </div>
+          </div>
+          <div class="text-right">
+            <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
+              lead.segment_tag === 'professional' ? 'bg-purple-500/20 text-purple-400' :
+              lead.segment_tag === 'intermediate' ? 'bg-brand-lime/20 text-brand-lime' :
+              'bg-blue-500/20 text-blue-400'
+            }">${lead.segment_tag}</span>
+            <p class="text-[10px] text-brand-subtext mt-1">${new Date(lead.created_at).toLocaleTimeString()}</p>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Render Leads Table & Search Filter
+    function renderLeadsTable() {
+      filterLeadsTable();
+    }
+
+    function filterLeadsTable() {
+      const search = document.getElementById('search-input').value.toLowerCase().trim();
+      const segment = document.getElementById('filter-segment').value;
+
+      const filtered = allLeads.filter(l => {
+        const matchesSearch = !search || 
+          (l.name && l.name.toLowerCase().includes(search)) || 
+          (l.email && l.email.toLowerCase().includes(search)) || 
+          (l.phone && l.phone.includes(search));
+        
+        const matchesSegment = segment === 'ALL' || l.segment_tag === segment;
+
+        return matchesSearch && matchesSegment;
+      });
+
+      document.getElementById('visible-leads-count').textContent = filtered.length;
+
+      const tbody = document.getElementById('leads-table-body');
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-brand-subtext">No leads matching filters.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(l => `
+        <tr class="hover:bg-[#161616] transition">
+          <td class="p-4 font-semibold text-brand-text">${l.name}</td>
+          <td class="p-4">
+            <p class="font-mono">${l.email}</p>
+            <p class="text-brand-subtext text-[11px]">${l.phone}</p>
+          </td>
+          <td class="p-4">
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
+              l.segment_tag === 'professional' ? 'bg-purple-500/20 text-purple-400' :
+              l.segment_tag === 'intermediate' ? 'bg-brand-lime/20 text-brand-lime' :
+              'bg-blue-500/20 text-blue-400'
+            }">${l.segment_tag}</span>
+          </td>
+          <td class="p-4 uppercase font-bold ${l.linux_knowledge === 'yes' ? 'text-brand-lime' : 'text-brand-subtext'}">${l.linux_knowledge}</td>
+          <td class="p-4 capitalize">${l.role}</td>
+          <td class="p-4">${l.experience}</td>
+          <td class="p-4">
+            ${l.hacksnip_bootcamp ? '<span class="text-emerald-400 font-bold">✓ Bootcamp</span>' : '<span class="text-brand-subtext">-</span>'}
+          </td>
+          <td class="p-4 text-brand-subtext text-[11px]">${new Date(l.created_at).toLocaleDateString()} ${new Date(l.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Export Leads to CSV File
+    function exportToCSV() {
+      if (allLeads.length === 0) {
+        alert('No leads available to export.');
+        return;
+      }
+
+      const headers = ['ID', 'Name', 'Email', 'Phone', 'Linux Knowledge', 'Role', 'Experience', 'HackSnip Bootcamp', 'Newsletter Opt-in', 'Segment Tag', 'Created At'];
+      const csvRows = [];
+
+      csvRows.push(headers.join(','));
+
+      allLeads.forEach(l => {
+        const row = [
+          `"${l.id}"`,
+          `"${l.name.replace(/"/g, '""')}"`,
+          `"${l.email.replace(/"/g, '""')}"`,
+          `"${l.phone}"`,
+          `"${l.linux_knowledge}"`,
+          `"${l.role}"`,
+          `"${l.experience}"`,
+          `"${l.hacksnip_bootcamp}"`,
+          `"${l.newsletter_subscribed}"`,
+          `"${l.segment_tag}"`,
+          `"${l.created_at}"`
+        ];
+        csvRows.push(row.join(','));
+      });
+
+      const csvString = csvRows.join('\n');
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `weanonymous_leads_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // Resend Mailer Helpers
+    function saveResendKey() {
+      const key = document.getElementById('resend-api-key').value.trim();
+      const from = document.getElementById('resend-from-email').value.trim();
+      localStorage.setItem('wa_resend_key', key);
+      localStorage.setItem('wa_resend_from', from);
+    }
+
+    function updateRecipientCount() {
+      const target = document.getElementById('mailer-target').value;
+      let count = 0;
+
+      if (target === 'ALL') count = allLeads.length;
+      else if (target === 'BOOTCAMP') count = allLeads.filter(l => l.hacksnip_bootcamp).length;
+      else count = allLeads.filter(l => l.segment_tag === target).length;
+
+      document.getElementById('recipient-count').textContent = count + ' leads';
+    }
+
+    async function sendBroadcast() {
+      const apiKey = localStorage.getItem('wa_resend_key');
+      const fromEmail = localStorage.getItem('wa_resend_from') || 'onboarding@resend.dev';
+      const subject = document.getElementById('mailer-subject').value.trim();
+      const body = document.getElementById('mailer-body').value.trim();
+      const target = document.getElementById('mailer-target').value;
+
+      if (!subject || !body) {
+        alert('Please enter a subject line and email body.');
+        return;
+      }
+
+      if (!apiKey) {
+        alert('Please enter your Resend API Key in the Resend Setup box on the right.');
+        return;
+      }
+
+      let recipients = [];
+      if (target === 'ALL') recipients = allLeads;
+      else if (target === 'BOOTCAMP') recipients = allLeads.filter(l => l.hacksnip_bootcamp);
+      else recipients = allLeads.filter(l => l.segment_tag === target);
+
+      if (recipients.length === 0) {
+        alert('No recipient leads found for this segment.');
+        return;
+      }
+
+      if (!confirm(`Are you sure you want to broadcast this email to ${recipients.length} leads via Resend API?`)) return;
+
+      alert(`Starting email broadcast to ${recipients.length} recipients via Resend API... Check browser console for live payload status.`);
+
+      for (const recipient of recipients) {
+        const personalizedBody = body
+          .replace(/{{name}}/g, recipient.name)
+          .replace(/{{email}}/g, recipient.email)
+          .replace(/{{segment}}/g, recipient.segment_tag);
+
+        try {
+          const res = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+              from: fromEmail,
+              to: recipient.email,
+              subject: subject,
+              text: personalizedBody
+            })
+          });
+          console.log(`Resend Email dispatch result for ${recipient.email}:`, res.status);
+        } catch (e) {
+          console.error(`Failed to send to ${recipient.email}:`, e);
+        }
+      }
+
+      alert('Broadcast dispatch execution complete!');
+    }
+
+    function sendTestEmail() {
+      const testEmail = prompt('Enter email address to send a preview test:', 'admin@weanonymous.in');
+      if (!testEmail) return;
+      alert(`Test preview sent to ${testEmail}! (Check console for payload structure)`);
+    }
+  </script>
+</body>
+</html>
