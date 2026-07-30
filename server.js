@@ -14,8 +14,8 @@ function formatSender(emailInput) {
   return `We Anonymous <${emailInput.trim()}>`;
 }
 
-// Visual Brand Dark HTML Template
-function generateBrandHtmlEmail(textMessage, recipientEmail = '') {
+// Visual Brand Dark HTML Template with Custom CTA Button Text & Link
+function generateBrandHtmlEmail(textMessage, recipientEmail = '', buttonText = '', buttonUrl = '') {
   const paragraphs = textMessage.trim().split(/\n\n+/);
   const formattedBody = paragraphs.map(p => {
     const withLinks = p.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color: #d5fc47; text-decoration: underline;">$1</a>');
@@ -23,6 +23,21 @@ function generateBrandHtmlEmail(textMessage, recipientEmail = '') {
   }).join('');
 
   const unsubUrl = `https://join.weanonymous.in/unsubscribe.html?email=${encodeURIComponent(recipientEmail)}`;
+
+  let ctaButtonHtml = '';
+  if (buttonText && buttonUrl) {
+    ctaButtonHtml = `
+              <!-- Call To Action Button -->
+              <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 32px;">
+                <tr>
+                  <td align="center">
+                    <a href="${buttonUrl}" target="_blank" style="display: inline-block; width: 100%; box-sizing: border-box; background-color: #d5fc47; color: #080808; text-decoration: none; font-size: 15px; font-weight: 700; text-align: center; padding: 16px 24px; border-radius: 999px; letter-spacing: 0.01em; box-shadow: 0 4px 14px rgba(213, 252, 71, 0.25);">
+                      ${buttonText}
+                    </a>
+                  </td>
+                </tr>
+              </table>`;
+  }
 
   return `<!DOCTYPE html>
 <html>
@@ -55,15 +70,7 @@ function generateBrandHtmlEmail(textMessage, recipientEmail = '') {
           <tr>
             <td style="padding: 32px; background-color: #111111;">
               ${formattedBody}
-              <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 32px;">
-                <tr>
-                  <td align="center">
-                    <a href="https://chat.whatsapp.com/HSpSgCon0LSKbtT1ptEjzI" target="_blank" style="display: inline-block; width: 100%; box-sizing: border-box; background-color: #d5fc47; color: #080808; text-decoration: none; font-size: 15px; font-weight: 700; text-align: center; padding: 16px 24px; border-radius: 999px; letter-spacing: 0.01em; box-shadow: 0 4px 14px rgba(213, 252, 71, 0.25);">
-                      Join WhatsApp Community →
-                    </a>
-                  </td>
-                </tr>
-              </table>
+              ${ctaButtonHtml}
             </td>
           </tr>
           <tr>
@@ -101,7 +108,7 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const payload = JSON.parse(body);
-        const { to, subject, text, html, from, apiKey, templateMode } = payload;
+        const { to, subject, text, html, from, apiKey, templateMode, buttonText, buttonUrl } = payload;
 
         const targetTo = Array.isArray(to) ? to[0] : to;
         const keyToUse = apiKey || DEFAULT_RESEND_KEY;
@@ -112,7 +119,6 @@ const server = http.createServer(async (req, res) => {
 
         if (templateMode === 'primary') {
           // PURE PLAIN TEXT MODE (Bypasses Gmail Promotions Filter)
-          // No HTML, No List-Unsubscribe headers -> Gmail treats as 1-on-1 personal email
           const plainTextBody = `${text || ''}\n\n---\nWe Anonymous Community\nUnsubscribe: ${unsubUrl}`;
           emailPayload = {
             from: fromEmail,
@@ -122,7 +128,10 @@ const server = http.createServer(async (req, res) => {
           };
         } else {
           // VISUAL BRAND DARK MODE
-          const finalHtml = html && html.includes('<table') ? html : generateBrandHtmlEmail(text || html || '', targetTo);
+          const btnText = buttonText !== undefined ? buttonText : 'Join WhatsApp Community →';
+          const btnUrl = buttonUrl !== undefined ? buttonUrl : 'https://chat.whatsapp.com/HSpSgCon0LSKbtT1ptEjzI';
+
+          const finalHtml = html && html.includes('<table') ? html : generateBrandHtmlEmail(text || html || '', targetTo, btnText, btnUrl);
           emailPayload = {
             from: fromEmail,
             to: Array.isArray(to) ? to : [to],
@@ -136,7 +145,7 @@ const server = http.createServer(async (req, res) => {
           };
         }
 
-        console.log(`[Email Dispatch Request] Target: ${targetTo} | Mode: ${templateMode || 'brand'} | Subject: "${subject}"`);
+        console.log(`[Email Dispatch Request] Target: ${targetTo} | Mode: ${templateMode || 'brand'} | Btn: "${buttonText || 'default'}" | Subject: "${subject}"`);
 
         // Dispatch Email
         let response = await fetch('https://api.resend.com/emails', {

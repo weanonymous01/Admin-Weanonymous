@@ -375,6 +375,38 @@
               </select>
             </div>
 
+            <!-- CTA Button Controls (Visual Brand Dark Mode) -->
+            <div id="cta-button-controls" class="p-4 bg-[#161616] border border-brand-border rounded-xl space-y-3">
+              <div class="flex items-center justify-between">
+                <label class="text-xs font-bold text-brand-text flex items-center gap-2">
+                  <i data-lucide="link" class="w-3.5 h-3.5 text-brand-lime"></i> INCLUDE LIME CTA BUTTON
+                </label>
+                <input type="checkbox" id="mailer-btn-enable" checked onchange="toggleCtaInputs()" class="w-4 h-4 accent-brand-lime cursor-pointer" />
+              </div>
+              <div id="cta-inputs-container" class="space-y-3 pt-3 border-t border-brand-border">
+                <div>
+                  <label class="block text-[11px] font-semibold text-brand-subtext mb-1">BUTTON TEXT</label>
+                  <input 
+                    type="text" 
+                    id="mailer-btn-text" 
+                    value="Join WhatsApp Community →" 
+                    placeholder="e.g. Join WhatsApp Community →" 
+                    class="w-full bg-[#111111] border border-brand-border rounded-xl p-2.5 text-xs text-brand-text focus:outline-none focus:border-brand-lime font-medium" 
+                  />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold text-brand-subtext mb-1">BUTTON TARGET LINK (URL)</label>
+                  <input 
+                    type="url" 
+                    id="mailer-btn-url" 
+                    value="https://chat.whatsapp.com/HSpSgCon0LSKbtT1ptEjzI" 
+                    placeholder="https://..." 
+                    class="w-full bg-[#111111] border border-brand-border rounded-xl p-2.5 text-xs text-brand-text focus:outline-none focus:border-brand-lime font-mono" 
+                  />
+                </div>
+              </div>
+            </div>
+
             <!-- Subject Line Input -->
             <div>
               <label class="block text-xs font-semibold text-brand-subtext mb-2">EMAIL SUBJECT LINE</label>
@@ -842,12 +874,211 @@ We Anonymous Team</textarea>
       const target = document.getElementById('mailer-target').value;
       const activeLeads = allLeads.filter(l => l.newsletter_subscribed !== false);
       let count = 0;
+      document.getElementById('page-title').textContent = titles[tabName][0];
+      document.getElementById('page-subtitle').textContent = titles[tabName][1];
+    }
+
+    // Refresh Data from Supabase
+    async function refreshData() {
+      if (!supabaseClient) return;
+
+      try {
+        const { data, error } = await supabaseClient
+          .from('leads')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Fetch Error:', error);
+          document.getElementById('db-status-badge').textContent = 'Error';
+          document.getElementById('db-status-badge').className = 'px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 font-semibold';
+          return;
+        }
+
+        allLeads = data || [];
+        document.getElementById('db-status-badge').textContent = 'Live Connected';
+        document.getElementById('db-status-badge').className = 'px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold';
+
+        renderDashboardStats();
+        renderLeadsTable();
+        updateRecipientCount();
+      } catch (err) {
+        console.error('Database communication error:', err);
+      }
+    }
+
+    // Render Dashboard Stats
+    function renderDashboardStats() {
+      const total = allLeads.length;
+      document.getElementById('stat-total-leads').textContent = total;
+
+      const beginner = allLeads.filter(l => l.segment_tag === 'beginner').length;
+      const intermediate = allLeads.filter(l => l.segment_tag === 'intermediate').length;
+      const professional = allLeads.filter(l => l.segment_tag === 'professional').length;
+
+      document.getElementById('stat-beginner-count').textContent = beginner;
+      document.getElementById('stat-intermediate-count').textContent = intermediate;
+      document.getElementById('stat-professional-count').textContent = professional;
+
+      const bootcampCount = allLeads.filter(l => l.hacksnip_bootcamp).length;
+      const bootcampPct = total ? Math.round((bootcampCount / total) * 100) : 0;
+      document.getElementById('bootcamp-optin-pct').textContent = bootcampPct + '%';
+      document.getElementById('bootcamp-optin-bar').style.width = bootcampPct + '%';
+      document.getElementById('bootcamp-optin-count').textContent = bootcampCount;
+
+      const newsletterCount = allLeads.filter(l => l.newsletter_subscribed).length;
+      const newsletterPct = total ? Math.round((newsletterCount / total) * 100) : 0;
+      document.getElementById('newsletter-optin-pct').textContent = newsletterPct + '%';
+      document.getElementById('newsletter-optin-bar').style.width = newsletterPct + '%';
+      document.getElementById('newsletter-optin-count').textContent = newsletterCount;
+
+      // Recent Registrations Feed
+      const recentContainer = document.getElementById('recent-leads-container');
+      if (allLeads.length === 0) {
+        recentContainer.innerHTML = '<p class="text-xs text-brand-subtext">No leads captured yet.</p>';
+        return;
+      }
+
+      recentContainer.innerHTML = allLeads.slice(0, 5).map(lead => `
+        <div class="flex items-center justify-between p-3 rounded-xl bg-[#161616] border border-brand-border text-xs">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-brand-lime/10 text-brand-lime font-bold flex items-center justify-center uppercase">
+              ${lead.name ? lead.name[0] : 'L'}
+            </div>
+            <div>
+              <p class="font-bold text-brand-text">${lead.name}</p>
+              <p class="text-[11px] text-brand-subtext">${lead.email} · ${lead.phone}</p>
+            </div>
+          </div>
+          <div class="text-right">
+            <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
+              lead.segment_tag === 'professional' ? 'bg-purple-500/20 text-purple-400' :
+              lead.segment_tag === 'intermediate' ? 'bg-brand-lime/20 text-brand-lime' :
+              'bg-blue-500/20 text-blue-400'
+            }">${lead.segment_tag}</span>
+            <p class="text-[10px] text-brand-subtext mt-1">${new Date(lead.created_at).toLocaleTimeString()}</p>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Render Leads Table & Search Filter
+    function renderLeadsTable() {
+      filterLeadsTable();
+    }
+
+    function filterLeadsTable() {
+      const search = document.getElementById('search-input').value.toLowerCase().trim();
+      const segment = document.getElementById('filter-segment').value;
+
+      const filtered = allLeads.filter(l => {
+        const matchesSearch = !search || 
+          (l.name && l.name.toLowerCase().includes(search)) || 
+          (l.email && l.email.toLowerCase().includes(search)) || 
+          (l.phone && l.phone.includes(search));
+        
+        const matchesSegment = segment === 'ALL' || l.segment_tag === segment;
+
+        return matchesSearch && matchesSegment;
+      });
+
+      document.getElementById('visible-leads-count').textContent = filtered.length;
+
+      const tbody = document.getElementById('leads-table-body');
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="p-6 text-center text-brand-subtext">No leads matching filters.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(l => `
+        <tr class="hover:bg-[#161616] transition">
+          <td class="p-4 font-semibold text-brand-text">${l.name}</td>
+          <td class="p-4">
+            <p class="font-mono">${l.email}</p>
+            <p class="text-brand-subtext text-[11px]">${l.phone}</p>
+          </td>
+          <td class="p-4">
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
+              l.segment_tag === 'professional' ? 'bg-purple-500/20 text-purple-400' :
+              l.segment_tag === 'intermediate' ? 'bg-brand-lime/20 text-brand-lime' :
+              'bg-blue-500/20 text-blue-400'
+            }">${l.segment_tag}</span>
+          </td>
+          <td class="p-4 uppercase font-bold ${l.linux_knowledge === 'yes' ? 'text-brand-lime' : 'text-brand-subtext'}">${l.linux_knowledge}</td>
+          <td class="p-4 capitalize">${l.role}</td>
+          <td class="p-4">${l.experience}</td>
+          <td class="p-4">
+            ${l.hacksnip_bootcamp ? '<span class="text-emerald-400 font-bold">✓ Bootcamp</span>' : '<span class="text-brand-subtext">-</span>'}
+          </td>
+          <td class="p-4 text-brand-subtext text-[11px]">${new Date(l.created_at).toLocaleDateString()} ${new Date(l.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Export Leads to CSV File
+    function exportToCSV() {
+      if (allLeads.length === 0) {
+        alert('No leads available to export.');
+        return;
+      }
+
+      const headers = ['ID', 'Name', 'Email', 'Phone', 'Linux Knowledge', 'Role', 'Experience', 'HackSnip Bootcamp', 'Newsletter Opt-in', 'Segment Tag', 'Created At'];
+      const csvRows = [];
+
+      csvRows.push(headers.join(','));
+
+      allLeads.forEach(l => {
+        const row = [
+          `"${l.id}"`,
+          `"${l.name.replace(/"/g, '""')}"`,
+          `"${l.email.replace(/"/g, '""')}"`,
+          `"${l.phone}"`,
+          `"${l.linux_knowledge}"`,
+          `"${l.role}"`,
+          `"${l.experience}"`,
+          `"${l.hacksnip_bootcamp}"`,
+          `"${l.newsletter_subscribed}"`,
+          `"${l.segment_tag}"`,
+          `"${l.created_at}"`
+        ];
+        csvRows.push(row.join(','));
+      });
+
+      const csvString = csvRows.join('\n');
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `weanonymous_leads_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // Resend Mailer Helpers
+    function saveResendKey() {
+      const key = document.getElementById('resend-api-key').value.trim();
+      const from = document.getElementById('resend-from-email').value.trim();
+      localStorage.setItem('wa_resend_key', key);
+      localStorage.setItem('wa_resend_from', from);
+    }
+
+    function updateRecipientCount() {
+      const target = document.getElementById('mailer-target').value;
+      const activeLeads = allLeads.filter(l => l.newsletter_subscribed !== false);
+      let count = 0;
 
       if (target === 'ALL') count = activeLeads.length;
       else if (target === 'BOOTCAMP') count = activeLeads.filter(l => l.hacksnip_bootcamp).length;
       else count = activeLeads.filter(l => l.segment_tag === target).length;
 
       document.getElementById('recipient-count').textContent = count + ' active subscribers';
+    }
+
+    function toggleCtaInputs() {
+      const enabled = document.getElementById('mailer-btn-enable').checked;
+      document.getElementById('cta-inputs-container').style.display = enabled ? 'block' : 'none';
     }
 
     async function sendBroadcast() {
@@ -857,6 +1088,10 @@ We Anonymous Team</textarea>
       const body = document.getElementById('mailer-body').value.trim();
       const target = document.getElementById('mailer-target').value;
       const mode = document.getElementById('mailer-mode').value;
+
+      const btnEnabled = document.getElementById('mailer-btn-enable').checked;
+      const buttonText = btnEnabled ? document.getElementById('mailer-btn-text').value.trim() : '';
+      const buttonUrl = btnEnabled ? document.getElementById('mailer-btn-url').value.trim() : '';
 
       if (!subject || !body) {
         alert('Please enter a subject line and email body.');
@@ -900,7 +1135,9 @@ We Anonymous Team</textarea>
               to: recipient.email,
               subject: subject,
               text: personalizedBody,
-              templateMode: mode
+              templateMode: mode,
+              buttonText: buttonText,
+              buttonUrl: buttonUrl
             })
           });
 
@@ -932,6 +1169,10 @@ We Anonymous Team</textarea>
       const body = document.getElementById('mailer-body').value.trim();
       const mode = document.getElementById('mailer-mode').value;
 
+      const btnEnabled = document.getElementById('mailer-btn-enable').checked;
+      const buttonText = btnEnabled ? document.getElementById('mailer-btn-text').value.trim() : '';
+      const buttonUrl = btnEnabled ? document.getElementById('mailer-btn-url').value.trim() : '';
+
       const testEmail = prompt('Enter your verified Resend account email address to send a preview test:', 'adarshverma3655@gmail.com');
       if (!testEmail) return;
 
@@ -947,7 +1188,9 @@ We Anonymous Team</textarea>
             to: testEmail,
             subject: `[TEST] ${subject}`,
             text: body.replace(/{{name}}/g, 'Test User').replace(/{{segment}}/g, 'beginner'),
-            templateMode: mode
+            templateMode: mode,
+            buttonText: buttonText,
+            buttonUrl: buttonUrl
           })
         });
 
