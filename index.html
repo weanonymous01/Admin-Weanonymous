@@ -74,7 +74,7 @@
 <body class="min-h-screen flex flex-col md:flex-row antialiased selection:bg-brand-lime selection:text-black">
 
   <!-- ========================================== -->
-  <!-- 1. PASSCODE LOCK SCREEN -->
+  <!-- 1. AUTHENTICATION LOCK SCREEN -->
   <!-- ========================================== -->
   <div id="lock-screen" class="fixed inset-0 z-50 bg-[#080808] flex items-center justify-center p-4">
     <div class="glass-card max-w-md w-full p-8 text-center space-y-6">
@@ -83,25 +83,39 @@
       </div>
       <div>
         <h2 class="text-2xl font-bold text-brand-text">We Anonymous Admin</h2>
-        <p class="text-brand-subtext text-sm mt-1">Enter your admin passcode to access dashboard</p>
+        <p class="text-brand-subtext text-sm mt-1">Authenticate with your Supabase Admin credentials</p>
       </div>
-      <form onsubmit="handleUnlock(event)" class="space-y-4">
-        <input 
-          type="password" 
-          id="passcode-input" 
-          placeholder="Enter Passcode" 
-          class="w-full bg-[#161616] border border-brand-border rounded-xl px-4 py-3 text-center text-lg font-semibold tracking-widest text-brand-text focus:outline-none focus:border-brand-lime"
-          required 
-          autofocus
-        />
+      <form onsubmit="handleUnlock(event)" class="space-y-4 text-left">
+        <div>
+          <label class="block text-xs font-semibold text-brand-subtext mb-1">ADMIN EMAIL</label>
+          <input 
+            type="email" 
+            id="auth-email" 
+            placeholder="admin@weanonymous.in" 
+            class="w-full bg-[#161616] border border-brand-border rounded-xl px-4 py-3 text-sm font-medium text-brand-text focus:outline-none focus:border-brand-lime"
+            required 
+            autofocus
+          />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-brand-subtext mb-1">PASSWORD</label>
+          <input 
+            type="password" 
+            id="auth-password" 
+            placeholder="••••••••" 
+            class="w-full bg-[#161616] border border-brand-border rounded-xl px-4 py-3 text-sm font-medium text-brand-text focus:outline-none focus:border-brand-lime"
+            required 
+          />
+        </div>
         <button 
           type="submit" 
+          id="auth-btn"
           class="w-full bg-brand-lime text-black font-bold py-3.5 rounded-xl hover:opacity-90 transition active:scale-[0.99]"
         >
-          Unlock Admin Panel
+          Authenticate Session
         </button>
       </form>
-      <p id="lock-error" class="text-red-400 text-xs hidden">Incorrect passcode. Try again.</p>
+      <p id="lock-error" class="text-red-400 text-xs hidden">Authentication failed. Check credentials.</p>
     </div>
   </div>
 
@@ -527,6 +541,17 @@ We Anonymous Team</textarea>
         }
       }
 
+      // Check Active Supabase Auth Session
+      if (supabaseClient) {
+        supabaseClient.auth.getSession().then(({ data }) => {
+          if (data && data.session) {
+            sessionStorage.setItem('wa_admin_authenticated', 'true');
+            document.getElementById('lock-screen').style.display = 'none';
+            refreshData();
+          }
+        });
+      }
+
       // Check Session Auth
       if (sessionStorage.getItem('wa_admin_authenticated') === 'true') {
         document.getElementById('lock-screen').style.display = 'none';
@@ -534,24 +559,59 @@ We Anonymous Team</textarea>
       }
     });
 
-    // Passcode Lock Handler
-    function handleUnlock(e) {
+    // Supabase Auth & Passcode Unlock Handler
+    async function handleUnlock(e) {
       e.preventDefault();
-      const input = document.getElementById('passcode-input').value;
-      if (input === DEFAULT_PASSCODE) {
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value.trim();
+      const errorEl = document.getElementById('lock-error');
+      const btn = document.getElementById('auth-btn');
+
+      btn.textContent = 'Authenticating...';
+      btn.disabled = true;
+
+      // 1. Try Supabase Auth First
+      if (supabaseClient && email) {
+        try {
+          const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+          if (data && data.session) {
+            sessionStorage.setItem('wa_admin_authenticated', 'true');
+            document.getElementById('lock-screen').style.display = 'none';
+            errorEl.classList.add('hidden');
+            btn.textContent = 'Authenticate Session';
+            btn.disabled = false;
+            refreshData();
+            return;
+          }
+        } catch (authErr) {
+          console.warn('Supabase Auth error:', authErr);
+        }
+      }
+
+      // 2. Fallback to Admin Passcode check
+      const savedPasscode = localStorage.getItem('wa_admin_passcode') || 'admin123';
+      if (password === savedPasscode || password === DEFAULT_PASSCODE) {
         sessionStorage.setItem('wa_admin_authenticated', 'true');
         document.getElementById('lock-screen').style.display = 'none';
-        document.getElementById('lock-error').classList.add('hidden');
+        errorEl.classList.add('hidden');
+        btn.textContent = 'Authenticate Session';
+        btn.disabled = false;
         refreshData();
       } else {
-        document.getElementById('lock-error').classList.remove('hidden');
+        errorEl.classList.remove('hidden');
+        errorEl.textContent = 'Authentication failed. Invalid email or password.';
+        btn.textContent = 'Authenticate Session';
+        btn.disabled = false;
       }
     }
 
-    function lockAdmin() {
+    async function lockAdmin() {
+      if (supabaseClient) {
+        try { await supabaseClient.auth.signOut(); } catch(e) {}
+      }
       sessionStorage.removeItem('wa_admin_authenticated');
       document.getElementById('lock-screen').style.display = 'flex';
-      document.getElementById('passcode-input').value = '';
+      document.getElementById('auth-password').value = '';
     }
 
     function updatePasscode() {
@@ -785,7 +845,7 @@ We Anonymous Team</textarea>
     }
 
     async function sendBroadcast() {
-      const apiKey = localStorage.getItem('wa_resend_key');
+      const apiKey = localStorage.getItem('wa_resend_key') || '';
       const fromEmail = localStorage.getItem('wa_resend_from') || 'onboarding@resend.dev';
       const subject = document.getElementById('mailer-subject').value.trim();
       const body = document.getElementById('mailer-body').value.trim();
@@ -793,11 +853,6 @@ We Anonymous Team</textarea>
 
       if (!subject || !body) {
         alert('Please enter a subject line and email body.');
-        return;
-      }
-
-      if (!apiKey) {
-        alert('Please enter your Resend API Key in the Resend Setup box on the right.');
         return;
       }
 
@@ -811,9 +866,10 @@ We Anonymous Team</textarea>
         return;
       }
 
-      if (!confirm(`Are you sure you want to broadcast this email to ${recipients.length} leads via Resend API?`)) return;
+      if (!confirm(`Are you sure you want to broadcast this email to ${recipients.length} lead(s) via Resend API?`)) return;
 
-      alert(`Starting email broadcast to ${recipients.length} recipients via Resend API... Check browser console for live payload status.`);
+      let successCount = 0;
+      let failCount = 0;
 
       for (const recipient of recipients) {
         const personalizedBody = body
@@ -822,32 +878,75 @@ We Anonymous Team</textarea>
           .replace(/{{segment}}/g, recipient.segment_tag);
 
         try {
-          const res = await fetch('https://api.resend.com/emails', {
+          // Route through local server proxy to bypass browser CORS
+          const res = await fetch('http://localhost:3002/api/send-email', {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${apiKey}`
+              'Content-Type': 'application/json'
             },
             body: JSON.stringify({
+              apiKey: apiKey,
               from: fromEmail,
               to: recipient.email,
               subject: subject,
               text: personalizedBody
             })
           });
-          console.log(`Resend Email dispatch result for ${recipient.email}:`, res.status);
+
+          const result = await res.json();
+
+          if (res.ok && !result.error) {
+            successCount++;
+            console.log(`✓ Email delivered successfully to ${recipient.email}:`, result);
+          } else {
+            failCount++;
+            console.warn(`✗ Resend dispatch error for ${recipient.email}:`, result);
+            if (result.message || result.name) {
+              alert(`Resend API Notice for ${recipient.email}:\n${result.message || JSON.stringify(result)}`);
+            }
+          }
         } catch (e) {
-          console.error(`Failed to send to ${recipient.email}:`, e);
+          failCount++;
+          console.error(`Failed to dispatch email to ${recipient.email}:`, e);
         }
       }
 
-      alert('Broadcast dispatch execution complete!');
+      alert(`Broadcast Complete!\nSuccessful: ${successCount}\nFailed/Notice: ${failCount}`);
     }
 
-    function sendTestEmail() {
-      const testEmail = prompt('Enter email address to send a preview test:', 'admin@weanonymous.in');
+    async function sendTestEmail() {
+      const apiKey = localStorage.getItem('wa_resend_key') || '';
+      const fromEmail = localStorage.getItem('wa_resend_from') || 'onboarding@resend.dev';
+      const subject = document.getElementById('mailer-subject').value.trim() || 'Test Email Preview - We Anonymous';
+      const body = document.getElementById('mailer-body').value.trim();
+
+      const testEmail = prompt('Enter your verified Resend account email address to send a preview test:', 'adarsh@example.com');
       if (!testEmail) return;
-      alert(`Test preview sent to ${testEmail}! (Check console for payload structure)`);
+
+      try {
+        const res = await fetch('http://localhost:3002/api/send-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            apiKey: apiKey,
+            from: fromEmail,
+            to: testEmail,
+            subject: `[TEST] ${subject}`,
+            text: body.replace(/{{name}}/g, 'Test User').replace(/{{segment}}/g, 'beginner')
+          })
+        });
+
+        const result = await res.json();
+        if (res.ok && !result.error) {
+          alert(`Success! Test email delivered to ${testEmail}. Check your inbox!`);
+        } else {
+          alert(`Resend API Response:\n${result.message || JSON.stringify(result)}`);
+        }
+      } catch (err) {
+        alert(`Error connecting to mailer server: ${err.message}`);
+      }
     }
   </script>
 </body>
