@@ -366,6 +366,15 @@
               </select>
             </div>
 
+            <!-- Email Format Mode Selector -->
+            <div>
+              <label class="block text-xs font-semibold text-brand-subtext mb-2">EMAIL FORMAT MODE (DELIVERABILITY)</label>
+              <select id="mailer-mode" class="w-full bg-[#161616] border border-brand-border rounded-xl p-3 text-sm text-brand-text font-medium focus:outline-none focus:border-brand-lime">
+                <option value="primary">Primary Inbox Mode (1-on-1 Clean Text -- Lands in Primary)</option>
+                <option value="brand">Visual Brand Dark Mode (Newsletter Card Layout)</option>
+              </select>
+            </div>
+
             <!-- Subject Line Input -->
             <div>
               <label class="block text-xs font-semibold text-brand-subtext mb-2">EMAIL SUBJECT LINE</label>
@@ -847,6 +856,7 @@ We Anonymous Team</textarea>
       const subject = document.getElementById('mailer-subject').value.trim();
       const body = document.getElementById('mailer-body').value.trim();
       const target = document.getElementById('mailer-target').value;
+      const mode = document.getElementById('mailer-mode').value;
 
       if (!subject || !body) {
         alert('Please enter a subject line and email body.');
@@ -889,7 +899,8 @@ We Anonymous Team</textarea>
               from: fromEmail,
               to: recipient.email,
               subject: subject,
-              text: personalizedBody
+              text: personalizedBody,
+              templateMode: mode
             })
           });
 
@@ -919,8 +930,9 @@ We Anonymous Team</textarea>
       const fromEmail = localStorage.getItem('wa_resend_from') || 'onboarding@resend.dev';
       const subject = document.getElementById('mailer-subject').value.trim() || 'Test Email Preview - We Anonymous';
       const body = document.getElementById('mailer-body').value.trim();
+      const mode = document.getElementById('mailer-mode').value;
 
-      const testEmail = prompt('Enter your verified Resend account email address to send a preview test:', 'adarsh@example.com');
+      const testEmail = prompt('Enter your verified Resend account email address to send a preview test:', 'adarshverma3655@gmail.com');
       if (!testEmail) return;
 
       try {
@@ -934,7 +946,8 @@ We Anonymous Team</textarea>
             from: fromEmail,
             to: testEmail,
             subject: `[TEST] ${subject}`,
-            text: body.replace(/{{name}}/g, 'Test User').replace(/{{segment}}/g, 'beginner')
+            text: body.replace(/{{name}}/g, 'Test User').replace(/{{segment}}/g, 'beginner'),
+            templateMode: mode
           })
         });
 

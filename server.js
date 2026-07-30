@@ -14,12 +14,10 @@ function formatSender(emailInput) {
   return `We Anonymous <${emailInput.trim()}>`;
 }
 
-// Function to generate a premium HTML Email Template matching We Anonymous brand
-function generateHtmlEmail(textMessage, recipientEmail = '') {
-  // Process paragraphs and line breaks for rich HTML layout
+// 1. Dark Mode Brand HTML Template (Visual Newsletter)
+function generateBrandHtmlEmail(textMessage, recipientEmail = '') {
   const paragraphs = textMessage.trim().split(/\n\n+/);
   const formattedBody = paragraphs.map(p => {
-    // If paragraph contains URLs, convert them to clickable links
     const withLinks = p.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color: #d5fc47; text-decoration: underline;">$1</a>');
     return `<p style="margin: 0 0 16px 0; line-height: 1.6; color: #e2e8f0; font-size: 15px;">${withLinks.replace(/\n/g, '<br>')}</p>`;
   }).join('');
@@ -37,10 +35,7 @@ function generateHtmlEmail(textMessage, recipientEmail = '') {
   <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #080808; padding: 40px 16px;">
     <tr>
       <td align="center">
-        <!-- Main Dark Container Card -->
         <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 580px; background-color: #111111; border: 1px solid rgba(254, 254, 254, 0.12); border-radius: 16px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.6);">
-          
-          <!-- Header Banner -->
           <tr>
             <td style="padding: 32px 32px 24px; border-bottom: 1px solid rgba(254, 254, 254, 0.08); background-color: #141414;">
               <table width="100%" border="0" cellspacing="0" cellpadding="0">
@@ -57,13 +52,9 @@ function generateHtmlEmail(textMessage, recipientEmail = '') {
               </table>
             </td>
           </tr>
-
-          <!-- Email Content Body -->
           <tr>
             <td style="padding: 32px; background-color: #111111;">
               ${formattedBody}
-
-              <!-- Call To Action Button -->
               <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 32px;">
                 <tr>
                   <td align="center">
@@ -75,8 +66,6 @@ function generateHtmlEmail(textMessage, recipientEmail = '') {
               </table>
             </td>
           </tr>
-
-          <!-- Footer with Automatic Unsubscribe Link -->
           <tr>
             <td style="padding: 24px 32px; border-top: 1px solid rgba(254, 254, 254, 0.08); background-color: #0d0d0d; text-align: center;">
               <p style="margin: 0 0 8px; font-size: 12px; color: rgba(254, 254, 254, 0.5);">
@@ -87,7 +76,6 @@ function generateHtmlEmail(textMessage, recipientEmail = '') {
               </p>
             </td>
           </tr>
-
         </table>
       </td>
     </tr>
@@ -96,8 +84,33 @@ function generateHtmlEmail(textMessage, recipientEmail = '') {
 </html>`;
 }
 
+// 2. Primary Inbox Mode Template (Human 1-on-1 Minimalist Format)
+function generatePrimaryHtmlEmail(textMessage, recipientEmail = '') {
+  const paragraphs = textMessage.trim().split(/\n\n+/);
+  const formattedBody = paragraphs.map(p => {
+    const withLinks = p.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color: #2563eb; text-decoration: underline;">$1</a>');
+    return `<p style="margin: 0 0 16px 0; line-height: 1.6; color: #111827; font-size: 15px;">${withLinks.replace(/\n/g, '<br>')}</p>`;
+  }).join('');
+
+  const unsubUrl = `https://join.weanonymous.in/unsubscribe.html?email=${encodeURIComponent(recipientEmail)}`;
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+</head>
+<body style="margin: 0; padding: 24px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #111827; background-color: #ffffff; -webkit-font-smoothing: antialiased;">
+  <div style="max-width: 600px; margin: 0 auto;">
+    ${formattedBody}
+    <div style="margin-top: 36px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280;">
+      We Anonymous · <a href="${unsubUrl}" style="color: #6b7280; text-decoration: underline;">Unsubscribe</a>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
 const server = http.createServer(async (req, res) => {
-  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -114,19 +127,27 @@ const server = http.createServer(async (req, res) => {
     req.on('end', async () => {
       try {
         const payload = JSON.parse(body);
-        const { to, subject, text, html, from, apiKey } = payload;
+        const { to, subject, text, html, from, apiKey, templateMode } = payload;
 
         const targetTo = Array.isArray(to) ? to[0] : to;
         const keyToUse = apiKey || DEFAULT_RESEND_KEY;
         let fromEmail = formatSender(from);
 
-        // Generate premium brand HTML template with recipient's unsubscribe link
-        const finalHtml = html && html.includes('<table') ? html : generateHtmlEmail(text || html || '', targetTo);
+        // Primary Mode vs Brand Dark Mode
+        let finalHtml = html;
+        if (!html || !html.includes('<table') || templateMode) {
+          if (templateMode === 'primary') {
+            finalHtml = generatePrimaryHtmlEmail(text || html || '', targetTo);
+          } else {
+            finalHtml = generateBrandHtmlEmail(text || html || '', targetTo);
+          }
+        }
+
         const unsubUrl = `https://join.weanonymous.in/unsubscribe.html?email=${encodeURIComponent(targetTo)}`;
 
-        console.log(`[Email Dispatch Request] Target: ${targetTo} | From: "${fromEmail}" | Subject: "${subject}"`);
+        console.log(`[Email Dispatch Request] Target: ${targetTo} | Mode: ${templateMode || 'brand'} | Subject: "${subject}"`);
 
-        // Dispatch Email with RFC List-Unsubscribe Header
+        // Dispatch Email with Primary Inbox Headers
         let response = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -141,14 +162,15 @@ const server = http.createServer(async (req, res) => {
             html: finalHtml,
             headers: {
               'List-Unsubscribe': `<${unsubUrl}>`,
-              'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+              'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+              'X-Entity-Ref-ID': Date.now().toString()
             }
           })
         });
 
         let data = await response.json();
 
-        // Smart Fallback: If custom domain is not yet verified on Resend, retry using onboarding@resend.dev
+        // Smart Fallback
         if (!response.ok && data.message && data.message.includes('domain is not verified')) {
           console.warn(`[Domain Unverified Notice]: "${fromEmail}" is not verified on Resend yet. Retrying dispatch automatically with "We Anonymous <onboarding@resend.dev>"...`);
           
@@ -167,7 +189,8 @@ const server = http.createServer(async (req, res) => {
               html: finalHtml,
               headers: {
                 'List-Unsubscribe': `<${unsubUrl}>`,
-                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                'X-Entity-Ref-ID': Date.now().toString()
               }
             })
           });
