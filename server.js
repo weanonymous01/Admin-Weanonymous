@@ -1,8 +1,20 @@
 const http = require('http');
 
 const PORT = 3002;
-// Read API Key from environment or request body
 const DEFAULT_RESEND_KEY = process.env.RESEND_API_KEY || '';
+
+// Helper to ensure sender display name is always "We Anonymous"
+function formatSender(emailInput) {
+  if (!emailInput || !emailInput.includes('@')) {
+    return 'We Anonymous <onboarding@resend.dev>';
+  }
+  // If user already included name format like "We Anonymous <email>", keep it
+  if (emailInput.includes('<') && emailInput.includes('>')) {
+    return emailInput;
+  }
+  // Wrap plain email with "We Anonymous" display name
+  return `We Anonymous <${emailInput.trim()}>`;
+}
 
 const server = http.createServer(async (req, res) => {
   // CORS Headers
@@ -25,9 +37,9 @@ const server = http.createServer(async (req, res) => {
         const { to, subject, text, html, from, apiKey } = payload;
 
         const keyToUse = apiKey || DEFAULT_RESEND_KEY;
-        let fromEmail = from && from.includes('@') ? from : 'We Anonymous <onboarding@resend.dev>';
+        let fromEmail = formatSender(from);
 
-        console.log(`[Email Dispatch Request] Target: ${to} | From: ${fromEmail} | Subject: "${subject}"`);
+        console.log(`[Email Dispatch Request] Target: ${to} | From: "${fromEmail}" | Subject: "${subject}"`);
 
         // First Attempt with requested From Email
         let response = await fetch('https://api.resend.com/emails', {
@@ -47,9 +59,9 @@ const server = http.createServer(async (req, res) => {
 
         let data = await response.json();
 
-        // Smart Fallback: If custom domain is not yet verified on Resend, retry using onboarding@resend.dev
+        // Smart Fallback: If custom domain is not yet verified on Resend, retry using onboarding@resend.dev with "We Anonymous" name
         if (!response.ok && data.message && data.message.includes('domain is not verified')) {
-          console.warn(`[Domain Unverified Notice]: "${fromEmail}" is not verified on Resend yet. Retrying dispatch automatically with "onboarding@resend.dev"...`);
+          console.warn(`[Domain Unverified Notice]: "${fromEmail}" is not verified on Resend yet. Retrying dispatch automatically with "We Anonymous <onboarding@resend.dev>"...`);
           
           fromEmail = 'We Anonymous <onboarding@resend.dev>';
           response = await fetch('https://api.resend.com/emails', {
