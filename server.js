@@ -15,7 +15,7 @@ function formatSender(emailInput) {
 }
 
 // Function to generate a premium HTML Email Template matching We Anonymous brand
-function generateHtmlEmail(textMessage) {
+function generateHtmlEmail(textMessage, recipientEmail = '') {
   // Process paragraphs and line breaks for rich HTML layout
   const paragraphs = textMessage.trim().split(/\n\n+/);
   const formattedBody = paragraphs.map(p => {
@@ -23,6 +23,8 @@ function generateHtmlEmail(textMessage) {
     const withLinks = p.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" style="color: #d5fc47; text-decoration: underline;">$1</a>');
     return `<p style="margin: 0 0 16px 0; line-height: 1.6; color: #e2e8f0; font-size: 15px;">${withLinks.replace(/\n/g, '<br>')}</p>`;
   }).join('');
+
+  const unsubUrl = `https://join.weanonymous.in/unsubscribe.html?email=${encodeURIComponent(recipientEmail)}`;
 
   return `<!DOCTYPE html>
 <html>
@@ -74,11 +76,11 @@ function generateHtmlEmail(textMessage) {
             </td>
           </tr>
 
-          <!-- Footer -->
+          <!-- Footer with Automatic Unsubscribe Link -->
           <tr>
             <td style="padding: 24px 32px; border-top: 1px solid rgba(254, 254, 254, 0.08); background-color: #0d0d0d; text-align: center;">
-              <p style="margin: 0 0 6px; font-size: 12px; color: rgba(254, 254, 254, 0.5);">
-                We respect your privacy. No spam, ever.
+              <p style="margin: 0 0 8px; font-size: 12px; color: rgba(254, 254, 254, 0.5);">
+                We respect your privacy. No spam, ever. · <a href="${unsubUrl}" target="_blank" style="color: rgba(254, 254, 254, 0.6); text-decoration: underline;">Unsubscribe</a>
               </p>
               <p style="margin: 0; font-size: 11px; color: rgba(254, 254, 254, 0.3);">
                 © 2026 We Anonymous Cybersecurity Community · All rights reserved.
@@ -114,15 +116,17 @@ const server = http.createServer(async (req, res) => {
         const payload = JSON.parse(body);
         const { to, subject, text, html, from, apiKey } = payload;
 
+        const targetTo = Array.isArray(to) ? to[0] : to;
         const keyToUse = apiKey || DEFAULT_RESEND_KEY;
         let fromEmail = formatSender(from);
 
-        // Generate premium brand HTML template if plain text provided or requested
-        const finalHtml = html && html.includes('<table') ? html : generateHtmlEmail(text || html || '');
+        // Generate premium brand HTML template with recipient's unsubscribe link
+        const finalHtml = html && html.includes('<table') ? html : generateHtmlEmail(text || html || '', targetTo);
+        const unsubUrl = `https://join.weanonymous.in/unsubscribe.html?email=${encodeURIComponent(targetTo)}`;
 
-        console.log(`[Email Dispatch Request] Target: ${to} | From: "${fromEmail}" | Subject: "${subject}"`);
+        console.log(`[Email Dispatch Request] Target: ${targetTo} | From: "${fromEmail}" | Subject: "${subject}"`);
 
-        // Dispatch Email
+        // Dispatch Email with RFC List-Unsubscribe Header
         let response = await fetch('https://api.resend.com/emails', {
           method: 'POST',
           headers: {
@@ -134,7 +138,11 @@ const server = http.createServer(async (req, res) => {
             to: Array.isArray(to) ? to : [to],
             subject: subject,
             text: text || '',
-            html: finalHtml
+            html: finalHtml,
+            headers: {
+              'List-Unsubscribe': `<${unsubUrl}>`,
+              'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+            }
           })
         });
 
@@ -156,7 +164,11 @@ const server = http.createServer(async (req, res) => {
               to: Array.isArray(to) ? to : [to],
               subject: subject,
               text: text || '',
-              html: finalHtml
+              html: finalHtml,
+              headers: {
+                'List-Unsubscribe': `<${unsubUrl}>`,
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+              }
             })
           });
           data = await response.json();

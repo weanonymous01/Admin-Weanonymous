@@ -831,13 +831,14 @@ We Anonymous Team</textarea>
 
     function updateRecipientCount() {
       const target = document.getElementById('mailer-target').value;
+      const activeLeads = allLeads.filter(l => l.newsletter_subscribed !== false);
       let count = 0;
 
-      if (target === 'ALL') count = allLeads.length;
-      else if (target === 'BOOTCAMP') count = allLeads.filter(l => l.hacksnip_bootcamp).length;
-      else count = allLeads.filter(l => l.segment_tag === target).length;
+      if (target === 'ALL') count = activeLeads.length;
+      else if (target === 'BOOTCAMP') count = activeLeads.filter(l => l.hacksnip_bootcamp).length;
+      else count = activeLeads.filter(l => l.segment_tag === target).length;
 
-      document.getElementById('recipient-count').textContent = count + ' leads';
+      document.getElementById('recipient-count').textContent = count + ' active subscribers';
     }
 
     async function sendBroadcast() {
@@ -852,10 +853,13 @@ We Anonymous Team</textarea>
         return;
       }
 
+      // Automatically filter out unsubscribed leads
+      const activeLeads = allLeads.filter(l => l.newsletter_subscribed !== false);
+
       let recipients = [];
-      if (target === 'ALL') recipients = allLeads;
-      else if (target === 'BOOTCAMP') recipients = allLeads.filter(l => l.hacksnip_bootcamp);
-      else recipients = allLeads.filter(l => l.segment_tag === target);
+      if (target === 'ALL') recipients = activeLeads;
+      else if (target === 'BOOTCAMP') recipients = activeLeads.filter(l => l.hacksnip_bootcamp);
+      else recipients = activeLeads.filter(l => l.segment_tag === target);
 
       if (recipients.length === 0) {
         alert('No recipient leads found for this segment.');
